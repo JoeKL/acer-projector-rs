@@ -1,6 +1,7 @@
 [package]
 name = "acer-projector-rs"
 version = "0.1.0"
+authors = ["joekl"]
 edition = "2024"
 description = "A universal RS232 driver for Acer DLP projectors"
 license = "MIT" 
