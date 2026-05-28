@@ -36,6 +36,5 @@ fn main() {
     match projector.send_command(Command::Press(acer_projector_rs::enums::Key::Menu)) {
         Ok(_) => println!("Command sent successfully!"),
         Err(e) => eprintln!("Failed to send command: {:?}", e),
-    } 
-
+    }
 }
