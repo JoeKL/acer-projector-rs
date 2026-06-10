@@ -1,13 +1,6 @@
 # acer-projector-rs
 
-A modular, type-safe, and stateless RS232 driver library written in Rust for Acer DLP projectors. 
-
-## Features
-
-* **Type-Safe:** Leverage Rust's type system with nested enums (e.g., `Command::SetSource(Source::Hdmi1)`) to guarantee you never send an invalid instruction.
-* **Stateless & Reliable:** Queries the hardware directly to verify configuration, preventing out-of-sync "ghost states".
-* **Robust Error Handling:** Built on top of `thiserror` to safely bubble up OS-level serial timeouts or hardware connection drops.
-* **Universal Protocol Support:** Implements all 70+ control and query actions defined in standard Acer DLP protocol sheets.
+A simple RS232 driver library written in Rust for Acer DLP projectors. 
 
 ## Hardware Requirements
 
@@ -20,15 +13,6 @@ To connect your computer to the projector, you will typically need:
 * **Data Bits:** 8
 * **Parity:** None
 * **Stop Bits:** 1
-
-## Installation
-
-Add this to your `Cargo.toml`:
-
-```toml
-[dependencies]
-acer-projector = "0.1.0"
-```
 
 ## Quick Start
 
