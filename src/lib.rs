@@ -1,4 +1,5 @@
-use core::time::Duration;
+use core::{result::Result, time::Duration};
+use std::io::Write;
 
 use serialport::SerialPort;
 
@@ -37,28 +38,29 @@ impl Projector {
         Ok(())
     }
 
-    /// Queries the hardware directly to see if the lamp is currently burning.
-    /// This bypasses any local memory and checks reality.
-    pub fn is_powered_on(&mut self) -> Result<bool, ProjectorError> {
-        // Send the explicit query: "* 0 Lamp ?"
-        self.send_command(Command::Ask(Query::Lamp1State))?;
-
-        // Wait for the response buffer
-        let response = self.read_response_string()?;
-
-        // Return a solid boolean based strictly on the hardware's reply
-        match response.trim() {
-            "*Lamp 1" => Ok(true),
-            "*Lamp 0" => Ok(false),
-            _ => Err(ProjectorError::ParseError),
-        }
-    }
-
     pub fn send_raw_command(&mut self, cmd_string: &str) -> Result<(), ProjectorError> {
         let bytes = cmd_string.as_bytes();
         self.port.write_all(bytes)?;
         self.port.flush()?;
         Ok(())
+    }
+
+    pub fn send_query(&mut self, query: Query) -> Result<String, ProjectorError> {
+        self.send_command(Command::Ask(query))?;
+        let response = self.read_response_string()?;
+        Ok(response)
+    }
+
+    /// Queries the hardware directly to see if the lamp is currently burning.
+    /// This bypasses any local memory and checks reality.
+    pub fn is_powered_on(&mut self) -> Result<bool, ProjectorError> {
+        let response = self.send_query(Query::Lamp1State)?;
+
+        match response.as_str() {
+            "Lamp 1" => Ok(true),
+            "Lamp 0" => Ok(false),
+            _ => Err(ProjectorError::ParseError),
+        }
     }
 
     pub fn power_on(&mut self) -> Result<(), ProjectorError> {
@@ -70,28 +72,51 @@ impl Projector {
     }
 
     fn read_response_string(&mut self) -> Result<String, ProjectorError> {
-        // Allocate a buffer to store the incoming bytes.
         let mut buffer: Vec<u8> = vec![0; 128];
+        let mut total_read = 0;
 
-        // Read from the serial port. This will block up to the timeout configured in `connect()`.
-        match self.port.read(buffer.as_mut_slice()) {
-            Ok(bytes_read) => {
-                if bytes_read == 0 {
-                    return Err(ProjectorError::Timeout);
+        loop {
+            if total_read >= buffer.len() {
+                break;
+            }
+
+            match self.port.read(&mut buffer[total_read..]) {
+                Ok(0) => {
+                    if total_read == 0 {
+                        return Err(ProjectorError::Timeout);
+                    }
+                    break;
                 }
+                Ok(bytes_read) => {
+                    total_read += bytes_read;
 
-                // Convert the raw bytes from the wire into a valid UTF-8 string
-                String::from_utf8(buffer[..bytes_read].to_vec())
-                    .map_err(|_| ProjectorError::ParseError)
-            }
-            Err(ref e) if e.kind() == std::io::ErrorKind::TimedOut => {
-                // Explicitly catch OS-level serial timeouts
-                Err(ProjectorError::Timeout)
-            }
-            Err(e) => {
-                // Wrap any other standard I/O hardware errors
-                Err(ProjectorError::StdIo(e))
+                    if buffer[..total_read].contains(&b'\n') {
+                        break;
+                    }
+                }
+                Err(ref e) if e.kind() == std::io::ErrorKind::TimedOut => {
+                    if total_read == 0 {
+                        return Err(ProjectorError::Timeout);
+                    }
+                    break;
+                }
+                Err(e) => {
+                    return Err(ProjectorError::StdIo(e));
+                }
             }
         }
+
+        let raw_response = String::from_utf8((buffer[..total_read]).to_vec())
+            .map_err(|_| ProjectorError::ParseError)?;
+
+        // The response is expected to be in the format: "*000\rXXXXX\r" where XXXXX is the actual response we care about.
+        let response = raw_response
+            .split("\r")
+            .nth(1)
+            .ok_or(ProjectorError::ParseError)?
+            .trim()
+            .to_string();
+
+        Ok(response)
     }
 }
